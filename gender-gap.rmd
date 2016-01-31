@@ -1,0 +1,659 @@
+---
+title: "Gender Pay Gap Analysis"
+author: "Lauren Renaud"
+date: 'December 15, 2015'
+output: html_document
+---
+  
+
+
+```{r global_options, include=FALSE}
+library(plyr)
+library(ggplot2)
+library(knitr)
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
+#knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+options (scipen=4)
+```
+
+
+```{r}
+survey <- read.csv("/Users/lauren/Documents/School/CMU/Box Sync/Classes/2015 Fall/R Programming/Final/nlsy97_income.csv", header=TRUE)
+
+survey <- transform(survey,
+                    incarc.totalyrs = E8043100,
+                    incarc.firstage = as.numeric(mapvalues(E8043200, c(-4, 10:30),
+                                                           c(NA, 10:30))),
+                    incarc.longest = as.numeric(mapvalues(E8043400, c(-4, 1:200), c(NA, 1:200))),
+                    school.teacherquality = as.ordered(mapvalues(R0069400, c(-5:4),
+                                                                 c(rep(NA, 6), 
+                                                                   "strong agree", "agree",
+                                                                   "disagree", "strong disagree"))),
+                    school.feelsafe = as.ordered(mapvalues(R0070000, c(-5:4),
+                                                           c(rep(NA, 6),
+                                                             "strong agree", "agree", "disagree",
+                                                             "strong disagree"))),
+                    religious.days = as.numeric(mapvalues(R0323900, c(-5:7),
+                                                          c(rep(NA, 5), 0:7))),
+                    by20.hsgrad = as.numeric(mapvalues(R0514700, c(-5:100),
+                                             c(rep(NA, 5), 0:100))),
+                    by20.jail = as.numeric(mapvalues(R0514800, c(-5:100),
+                                                       c(rep(NA, 5), 0:100))),
+                    by20.parent = as.numeric(mapvalues(R0514900, c(-5:100),
+                                                       c(rep(NA, 5), 0:100))),
+                    by30.parent = as.numeric(mapvalues(R0515100, c(-5:100),
+                                                       c(rep(NA, 5), 0:100))),
+                    gender = as.factor(mapvalues(R0536300, c(1, 2), 
+                                                c("male","female"))),
+                    birth.month = as.ordered(mapvalues(R0536401, c(1:12),
+                                                     c("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                                       "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"))),
+                    birth.year = R0536402
+                    )
+
+survey <- transform(survey,
+                    limiting.condition = as.factor(mapvalues(R0681300, c(-5:1),
+                                                             c(NA, NA, "invalid.skip", "dont.know",
+                                                               "refusal", "no", "yes"))),
+                    depressed.female = as.factor(mapvalues(R0690800, c(-5:2),
+                                                   c(NA, NA, "invalid.skip", "dont.know", "refusal",
+                                                     "no", "sometimes", "often"))),
+                    depressed.male = as.factor(mapvalues(R0691200, c(-5:2),
+                                                          c(NA, NA, "invalid.skip", "dont.know", "refusal",
+                                                            "no", "sometimes", "often"))),
+                    current.enroll = as.factor(mapvalues(R1201400, c(-5:11),
+                                                         c(NA, NA, "invalid.skip", "dont.know", "refusal",
+                                                           NA, "no enroll no HS", "no enroll GED",
+                                                           "no enroll HS", "no enroll some col",
+                                                           "no enroll 2yr col", "no enroll 4yr col",
+                                                           "no enroll grad", "enroll in HS",
+                                                           "enroll in 2yr", "enroll in 4yr", "enroll in grad"))),
+                    household.networth.parent = as.numeric(mapvalues(R1204700, c(-5:-1),
+                                                                     c(rep(NA, 5)))),
+                    race = as.factor(mapvalues(R1482600, c(1:4),
+                                               c("black", "hispanic", "mixed", "white"))),
+                    household.networth.youth = as.numeric(mapvalues(S2011600, c(-5:-1),
+                                                                    c(NA, NA, NA, NA, NA))),
+                    weight.2004 = as.numeric(mapvalues(S4677200, c(-5:-1),
+                                                       c(NA, NA, NA, NA, NA))),
+                    weight.2004.feel = as.factor(mapvalues(S4685800, c(-5:5),
+                                                           c(NA, NA, NA, "dont know", "refused", NA,
+                                                             "v underweight", "underweight", "average",
+                                                             "overweight", "v overweight"))),
+                    weight.2011 = as.numeric(mapvalues(T7635800, c(-5:-1),
+                                                       c(NA, NA, NA, NA, NA))),
+                    weight.2011.feel = as.factor(mapvalues(T7640300, c(-5:5),
+                                                           c(NA, NA, NA, "g.dont know", "f.refused", NA,
+                                                             "a.v underweight", "b.underweight", "c.average",
+                                                             "d.overweight", "e.v overweight"))),
+                    weight.2001.change = as.factor(mapvalues(T7640400, c(-5:4),
+                                                             c(NA, NA, NA, "dont know", "refused", NA,
+                                                               "lose", "gain", "stay same", "do nothing"))),
+                    college.private.pub = as.factor(mapvalues(T6650100, c(-5:3),
+                                                              c(NA, NA, "invalid skip", "dont know", "refused",
+                                                                NA, "public", "private nonprofit",
+                                                                "private for profit")))
+                    )
+
+survey <- transform(survey,
+                    fam.income.2011 = as.numeric(mapvalues(T6656700, c(-5:-1),
+                                                           c(rep(NA, 5)))),
+                    household.size = as.numeric(mapvalues(T6656900, c(-5:20),
+                                                          c(rep(NA, 5), 0:20))),
+                    household.under18 = as.numeric(mapvalues(T6657000, c(-5:20),
+                                                             c(rep(NA, 5), 0:20))),
+                    household.under6 = as.numeric(mapvalues(T6657100, c(-5:20),
+                                                            c(rep(NA, 5), 0:20))),
+                    school.highestdeg = as.ordered(mapvalues(T6657300, c(-5:7),
+                                                             c(NA, NA, "invalid skip", "dont know", "refused",
+                                                               "none", "GED", "HS", "2 yr", "Bachelor", "Masters",
+                                                               "PhD", "Prof Deg"))),
+                    marital.status = as.factor(mapvalues(T6662900, c(-5:4),
+                                                         c(NA, NA, "invalid skip", "dont know", "refused",
+                                                           "never married", "married", "separated",
+                                                           "divorced", "widowed"))),
+                    school.highgrade = as.ordered(mapvalues(T6767000, c(-5:20),
+                                                            c(NA, NA, NA, "dont know", "refused", "none",
+                                                              "1st", "2nd", "3rd", "4th", "5th", "6th",
+                                                              "7th", "8th", "9th", "10th", "11th", "12th",
+                                                              "1st col", "2nd col", "3rd col", "4th col",
+                                                              "5th col", "6th col", "7th col",
+                                                              "8+ col")))
+                    )
+
+survey <- transform(survey,
+                    income.fromjob = as.factor(mapvalues(T7545400, c(-5:1),
+                                                         c(NA, NA, NA, "dont know", "refused", "no", "yes"))),
+                    income.lastyr = as.integer(mapvalues(T7545600, c(-5:-1),
+                                                         c(NA, NA, NA, "dont know", "refused"))),
+                    spouse.income.fromjob = as.factor(mapvalues(T7546500, c(-5:1),
+                                                                c(NA, NA, NA, "dont know", "refused",
+                                                                  "no", "yes"))),
+                    spouse.income.lastyr = as.integer(mapvalues(T7546900, c(-5:-1),
+                                                                c(NA, NA, NA, "dont know", "refused"))),
+                    energy.month = as.factor(mapvalues(T7711600, c(-5:6),
+                                                       c(NA, NA, NA, NA, NA, NA,
+                                                         "all", "most", "good bit", "some", "little", "none"))),
+                    industry = as.factor(mapvalues(T7731100, c(-5:0, 170:290, 370:490, 570:690, 770, 1070:3990,
+                                                               4070:4590, 4670:5790, 5890, 6070:6390, 6470:6780,
+                                                               6870:7190, 7270:7790, 7860:8470, 8560:8690, 
+                                                               8770:9290, 9370:9590, 9670:9890, 9950:9990),
+                                                   c(rep(NA, 6), rep("agr forest fish", 121),
+                                                     rep("mining", 121), rep("utilities", 121),
+                                                     "construction", rep("manufacturing", 2921),
+                                                     rep("wholesale trade", 521), rep("retail trade", 1121),
+                                                     "arts rec", rep("transport warehouse", 321),
+                                                     rep("info comm", 311), rep("fin insure real estate", 321),
+                                                     rep("professional", 521), rep("edu health social", 611), 
+                                                     rep("entertain accom food", 131),
+                                                     rep("other public services", 521),
+                                                     rep("public admin", 221),
+                                                     rep("active military", 221), rep("acs special codes", 41))))
+                    )
+
+
+## does not cause crash ## 
+## as.ordered -- not showing up in order on the table, showing up alphabetical ##
+survey <- transform(survey,
+                    harddrugs.2004.ever = as.factor(mapvalues(R2191500, c(-5:1),
+                                                    c(rep(NA, 3), "dont know", "refusal", "no", "yes"))),
+                    marijuana.2004.30days = as.numeric(mapvalues(R4908500, c(-5:30),
+                                                            c(rep(NA, 5), 0:30))),
+                    smoked.dli = as.factor(mapvalues(T7638800, c(-5:1),
+                                                     c(rep(NA, 3), "dont know", "refused", "no", "yes"))),
+                    drank.dli = as.factor(mapvalues(T7639200, c(-5:1),
+                                                    c(rep(NA, 3), "dont know", "refused", "no", "yes"))),
+                    marijuana.2011.30days = as.numeric(mapvalues(T7639800, c(-5:30),
+                                                                 c(rep(NA, 5), 0:30))),
+                    harddrugs.2011.dli = as.factor(mapvalues(T7640000, c(-5:1),
+                                                         c(rep(NA, 3), "dont know", "refusal", "no", "yes"))),
+                    organized = as.ordered(mapvalues(S0920000, c(-5:5),
+                                                    c(rep(NA, 6),
+                                                      "v organized", "organized", "middle",
+                                                      "disorganized", "v disorganized"))),
+                    trustful = as.ordered(mapvalues(S0920700, c(-5:5),
+                                                    c(rep(NA, 6),
+                                                      "v trustful", "trustful", "middle", "distrustful",
+                                                      "v distrustful"))),
+                    debt.at20 = as.numeric(mapvalues(Z9050100, c(-5:-1),
+                                                         c(rep(NA, 5)))),
+                    debt.at30 = as.numeric(mapvalues(Z9122500, c(-5:-1),
+                                                     c(rep(NA, 5)))),
+                    employee.num.teen = as.numeric(mapvalues(Z9050500, c(-5:10),
+                                                         c(rep(NA, 5), 0:10))),
+                    employee.num.from20 = as.numeric(mapvalues(Z9050600, c(-5:10),
+                                                         c(rep(NA, 5), 0:10))),
+                    alljobs.num.from20 = as.numeric(mapvalues(Z9050700, c(-5:10),
+                                                               c(rep(NA, 5), 0:10)))
+                    )
+
+survey <- transform(survey, 
+                    respons.shouldhelplessfortune = as.ordered(mapvalues(T1069100, c(-5:5),
+                                                                  c(rep(NA, 6), 
+                                                                    "strong disagree", "disagree",
+                                                                    "neither", "agree", "agree"))),
+                    respons.lessfortcareofself = as.ordered(mapvalues(T1069101, c(-5:5),
+                                                                  c(rep(NA, 6), 
+                                                                    "strong disagree", "disagree",
+                                                                    "neither", "agree", "agree"))),
+                    respons.helpimport = as.ordered(mapvalues(T1069102, c(-5:5),
+                                                             c(rep(NA, 6), 
+                                                               "strong disagree", "disagree", "neither",
+                                                               "agree", "agree"))),
+                    respons.lookafterself = as.ordered(mapvalues(T1069103, c(-5:5),
+                                                             c(rep(NA, 6), 
+                                                               "strong disagree", "disagree", "neither",
+                                                               "agree", "agree")))
+                    )
+
+# # DOESNT WORK # 
+# survey <- transform(survey,
+#                     sat.math = as.factor(mapvalues(Z9033700, c(-5:6),
+#                                                     c(rep(NA, 6), "200-300", "301-400", "401-500", "501-600",
+#                                                       "601-700", "701-800"))),
+#                     sat.verbal = as.factor(mapvalues(Z9033900, c(-5:6),
+#                                                     c(rep(NA, 6), "200-300", "301-400", "401-500", "501-600",
+#                                                       "601-700", "701-800"))),
+#                     act = as.factor(mapvalues(Z9034100, c(-5:6),
+#                                                     c(rep(NA, 6), "200-300", "301-400", "401-500", "501-600",
+#                                                       "601-700", "701-800"))),
+#                     )
+
+# subset leaving out topcoded incomes
+survey.i <- subset(survey, subset = income.lastyr < 120000)
+survey.house.sub <- subset(survey.i, subset = household.networth.parent > 0 & household.networth.parent < 599002)
+survey.weight.sub <- subset(survey.i, subset = weight.2011 > 70)
+survey.female <- subset(survey.i, subset = gender=="female")
+survey.male <- subset(survey.i, subset = gender=="male")
+```
+
+# Project Scope:
+
+> **Is there a significant difference in income between men and women? Does the difference vary depending on other factors (e.g., education, profession, criminal history, marriage status, etc.)?**
+
+## Data Summary
+
+To analyze this question, we'll use the [National Longitudinal Survey of Youth](http://www.bls.gov/nls/nlsy97.htm), 1997 cohort data set. This dataset is comprised of about 9000 youth who were initially interviewed in 1997, and then were interviewed more times in the following years. The dataset seeks to produce a longitudinal study of respondents transition from teenage to adult years. This gives us an opportunity to look at how income and gender intersect with other factors, particularly from the teenage years.
+
+*Note: The most recent survey data is from 2011. Any references to "last year" refer to the year prior to the survey, 2010.*
+
+First we should know the count of respondents, broken down by gender. We have **`r sum(survey$gender=="female")` females and `r sum(survey$gender=="male")` males** in the survey.
+
+Next we'll look at the mean income from last year, broken down by gender. 
+
+```{r}
+gender.income <- aggregate(income.lastyr ~ gender, FUN=mean, na.rm=TRUE, data=survey)
+colnames(gender.income) <- c("Gender", "Income")
+kable(gender.income)
+```
+
+We can see here already that the average income from last year for women is lower than it is for men, by $`r round((gender.income[2,2] - gender.income[1,2]), 2)`, or that women are making `r round((100 *(gender.income[1,2])/(gender.income[2,2])), 2)`% of what men make, on average. We'll go into more detail about the statisitical significance of the difference later.
+
+If we look at boxplots of income broken down by gender, we see that the interquartile range for women is lower than that of men, in addition to the lower mean. The outliers for the top earning women catch up with the outliers for the top earning men.
+
+*Note: At this point in the data summary we are excluding the top coded values. The rationale and further analysis regarding top coded values will be explained later in the report.*
+
+```{r}
+qplot(gender, income.lastyr, geom = "boxplot", data = survey.i, fill=gender) +
+  labs(x="Gender", y="Income Last Year", title="Mean Income by Gender")
+```
+
+Now that we've looked at the data and observed a difference, we can run a t-test to find the statistical signifigance of this difference.
+
+```{r}
+test.gender <- t.test(survey$income.lastyr ~ survey$gender, conf.level = 0.99)
+t.test(survey$income.lastyr ~ survey$gender, conf.level = 0.99)
+```
+
+
+At a 95% confidence interval, we find a p-value of `r round(test.gender$p.value, 4)`, indicating that the difference in the means of male and female income are not attributable to random chance.
+
+**So, to begin, we can say that yes, there is a significant difference in income between men and women.** We will now consider the impact of other factors.
+
+#### Race
+The mean income from last year, broken down by gender and race, can give us a starting off point for exploring other factors that may contribute to the wage gap. This table displays average income by gender by race, followed by the absolute and then percentage difference for each race in the survey. We can see that the gender wage gap exists for all racial catergories in the survey, though, by varying amounts. Looking at the boxplots, there appears to be less of a difference between the income means by gender for Blacks than for other races. There's a large difference in the means for mixed race people, but there are also only `r nrow(survey[survey$race=="mixed",])` respondends coded as mixed race, making up only `r round(100 * nrow(survey[survey$race=="mixed",])/nrow(survey), 2)`% of the survey. This low sample size makes it difficult to make inferences about this group.
+
+```{r, results='asis'}
+table.race <- with(survey.i, tapply(income.lastyr, INDEX = list(race, gender), FUN = mean, na.rm=TRUE))
+table.race <- transform(table.race, diff = male - female, perc = round(100 * ((female)/(male)), 2))
+table.race <- table.race[order(table.race$perc), ]
+colnames(table.race) <- c("Female", "Male", "Abs Diff", "% Diff")
+kable(table.race)
+
+# boxplot of race by income
+cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+qplot(race, income.lastyr, data=survey.i, geom="boxplot", fill=gender) +
+  scale_fill_manual(values=cbPalette) +
+  labs(x="Race", y="Income Last Year", title="Mean Income by Race & Gender")
+```
+
+#### Industry
+Now we can also look at mean income by gender and industry. Again we see women making less, on average, than men across most of the categories.
+
+*The mean income for women is actually greater than men for `acs special codes`. Similarly to what we saw in the breakdowns by race, though, it is worth nothing that only `acs special codes` made up only `r count(survey$industry=="acs special codes")[2,2]` of respondants, which may mean that a singular or small number of outliers may be skewing this data.*
+
+```{r}
+table.industry <- with(survey.i, tapply(income.lastyr, INDEX = list(industry, gender), FUN = mean, na.rm=TRUE))
+table.industry <- transform(table.industry, diff = male - female, perc = round(100 * ((female)/(male)), 2))
+table.industry <- table.industry[order(table.industry$perc), ]
+colnames(table.industry) <- c("Female", "Male", "Abs Diff", "% Diff")
+kable(table.industry)
+```
+
+If we look at boxplots of the distribution of income by gender and industry, we can make some other important observations. It appears that the sample of female active duty military is very small, and if we look at the data we can find it's actually only `r count(survey.female$industry=="active military")[2,2]`. The lower quartile for men in the `mining` and `utilities` are above the upper quartile for women in those industries, while for `agr forest fish` the quartiles don't even overlap. The differences seem smaller for `professional`, `wholesale trade`, `entertain accom food`, and `edu health social`.
+
+```{r,fig.width=7}
+industry.colors <- c("goldenrod2", "#999999")
+qplot(industry, income.lastyr, data=survey.i, geom="boxplot", fill=gender) +
+  scale_fill_manual(values=industry.colors) +
+  labs(x="Industry", y="Income Last Year", title="Mean Income by Industry & Gender") +
+  theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust = 1))
+```
+
+
+[**NOTE How do I make this graphic sort by percentage difference or absolute difference, instead of alphabetical?**]
+
+## Methodology
+
+#### *Missing Values*
+
+When bringing in and intially coding the data, I excluded missing values from numeric variables. While we can possibly make some assumptions about someone who, for example, did not know their income from last year, when analyzing and computing numeric values it is very difficult to do something with those assumptions.
+
+Unfortuantely, we were missing last year's income data for `r round(100 * (length(which(is.na(survey$income.lastyr))) /length(survey$income.lastyr)), 2)`% of respondents. While that is unfortately a large percentage of our dataset, it still leaves `r length(which(!is.na(survey$income.lastyr)))` respondents, which is a large sample size. The same goes for `industry`, where we were missing `r round(100 * (length(which(is.na(survey$industry))) /length(survey$income.lastyr)), 2)`%, but still have `r length(which(!is.na(survey$industry)))` answers to analyze.
+
+This does introduce a limit into the data, but for the most part the number of missing values was not too great.
+
+For categorical values, things like `valid skip` and `non-interview` were coded into the analysis as `NA`, while in most cases for categorical values `refusal` and `don't know` were coded in as such. The `refusal` and `dont know` values were ignored for some values where they comprised a small sample, but were analyzed further where they comprised a more signifigant proportion of responses.  
+
+#### *Topcoded Values*
+
+For the most part, I removed topcoded values.
+
+One instance where it made a difference was in looking at average income of men and women by industry. The averages by industry were displayed above in the data summary. The table below displays the industry, then mean female and male salary and the absolute difference and percent difference for means, all excluding topcoded values, followed by the absolute and percent differences if you include the topcoded values. The final column finds the difference in percentage points between the means that included the topcoded values and those that did not. This table is sorted by the final column.
+
+```{r}
+## top coded table
+industry.topcode <- with(survey, tapply(income.lastyr, INDEX = list(industry, gender), FUN = mean, na.rm=TRUE))
+industry.topcode <- transform(industry.topcode, diff = male - female, perc = round(100 * ((female)/(male)), 2))
+industry.topcode <- industry.topcode[order(industry.topcode$perc), ]
+
+## excluding top codes table
+table.industry <- with(survey.i, tapply(income.lastyr, INDEX = list(industry, gender), FUN = mean, na.rm=TRUE))
+table.industry <- transform(table.industry, diff = male - female, perc = round(100 * ((female)/(male)), 2))
+table.industry <- table.industry[order(table.industry$perc), ]
+
+## combining the two tables
+table.combine <- transform(table.industry,
+                           with.diff = industry.topcode$diff, with.perc = industry.topcode$perc,
+                           differences = table.industry$perc - industry.topcode$perc)
+table.combine <- table.combine[order(table.combine$differences), ]
+colnames(table.combine) <- c("Female", "Male", "Excld Diff", "Excld % Diff", "W Diff", "W % Diff", "Differences")
+kable(table.combine)
+```
+
+Focusing only on the `Differences` column we can see that some industries -- `info comm` and `construction` in particular at `r table.combine[1,7]`% and `r table.combine[17,7]`% respectively, followed by `active military`, `utilities`, and `mining` -- have high differences depending on the inclusion or exclusion of the topcoded values.
+The next question is how big of a difference it makes to our analysis that these values are different.
+
+```{r}
+r2 <- c("info comm", count(survey$industry=="info comm")[2,2], 
+        round(100 * (count(survey$industry=="info comm")[2,2])/(nrow(survey)), 2))
+r1 <- c("construction", count(survey$industry=="construction")[2,2], 
+        round(100 * (count(survey$industry=="construction")[2,2])/(nrow(survey)), 2))
+r4 <- c("utilities", count(survey$industry=="utilities")[2,2],
+        round(100 * (count(survey$industry=="utilities")[2,2])/(nrow(survey)), 2))
+r3 <- c("mining", count(survey$industry=="mining")[2,2],
+        round(100 * (count(survey$industry=="mining")[2,2])/(nrow(survey)), 2))
+
+count.industry <- NULL
+count.industry <- rbind(count.industry, r1, r2, r3, r4)
+colnames(count.industry) <- c("Industry", "Count", "% Respondants")
+kable(count.industry)
+```
+
+Construction workers make up `r count.industry[1,3]`% of the respondents, which is a fair amount, while the number of respondants for other industries comprise a small portion of our sample.
+
+#### *Unexpected Variables That Had No Connection & Other Relationships*
+
+I had expected to find a difference between drug use and income by gender, but it was not very different.
+
+I also thought there may be a difference income by gender based on household income growing up, that wealthier households would possibly set men up to be wealthier to a greater extent than women. However, it appears that greater income as a teenager means greater income as an adult but the difference by gender stays about steady, as seen in this graph below. In order to do this analysis I had to exclude some low, negative household income values that I think may be been erroneously entered.
+
+```{r}
+house.colors <- c("tomato4", "turquoise")
+house.plot <- ggplot(data=survey.house.sub, aes(x=household.networth.parent, y=income.lastyr, color=gender))
+house.plot + geom_point() + scale_colour_manual(values=house.colors) +
+  geom_smooth(method="lm") +
+  ggtitle("Income by Household Income as Teenager") +
+  labs(x="Household Income as Teenager", y="Income Last Year") 
+```
+
+Based on my finding that there is a relationship between weight and the income gap (more below) I suspected there may be a relationship between how respondents evaluated their own weight and income. However, we don't see much difference across different answers to this question other than for men who consider themselves very underweight compared to women in the same catergory.
+
+```{r}
+weight.feel.colors <- c("springgreen3", "#999999")
+qplot(weight.2011.feel, income.lastyr, data=survey.weight.sub, geom="boxplot", fill=gender) +
+  scale_fill_manual(values=weight.feel.colors) +
+  labs(x="Feelings About Own Weight", y="Income Last Year", title="Mean Income by Feelings About Weight") +
+  theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust = 1))
+```
+
+[**NOTE How do I make this graphic sort by percentage difference or absolute difference, instead of alphabetical? I sort of hacked it by adding letters a-g at the beginning, but how do it cleanly?**]
+
+#### *Chosen Analysis*
+
+I then chose to look at three variables -- `race`, `weight` and `marital status`. As we saw earlier in the data summary, there are observable differences in the pay gap broken down by race, and we can use more finite methods to explore this further. Weight is a great variable in this dataset because of very low missingness. Marital status is interesting because the different factors within the variable impact the predicted incomes -- in some cases increasing the gap and in some cases decreasing the gap, as we'll see further on in the analysis.
+
+## Findings
+
+To begin, we must know if our data is nearly normal, first looking at the dataset with the topcoded values included:
+  
+```{r}  
+with(survey, qqnorm(income.lastyr[gender=="female"]))
+with(survey, qqline(income.lastyr[gender=="female"], col="violetred4"))
+```
+
+and then with the topcoded values removed:
+
+```{r}
+with(survey.i, qqnorm(income.lastyr[gender=="female"]))
+with(survey.i, qqline(income.lastyr[gender=="female"], col="violetred4"))
+```
+
+The fact inclusion of the topcoded values gives us a strange anomoly at the top of the normal Q-Q plot, so we cannot use that for our analysis at this point. While the values when excluding the topcoded values are not perfecly normal, they're close enough that we can run our analyses. 
+
+For starters, I ran a t-test to determine if the difference in average income between men and women is stastistically significant, and with a p-value of `r round((t.test(income.lastyr ~ gender, data = survey.i)$p.value), 2)`, or basically zero, we can say that yes, it is. Based on the coeffients from a linear model, we can predict that, all other variables held constant, a man will make $`r summary(lm(income.lastyr ~ gender, data=survey.i))$coef[2,1]` more per year than a woman.
+
+#### Race
+
+We can use linear regression to explore the collinearity between race and gender.
+
+```{r}
+race.lm <- lm(income.lastyr ~ race + gender, data = survey)
+kable(round(summary(race.lm)$coef, 3), format = 'markdown')
+race.intercept <- coef(race.lm)[1]
+race.hispanic <- coef(race.lm)[2]
+race.mixed <- coef(race.lm)[3]
+race.white <- coef(race.lm)[4]
+race.gendermale <- coef(race.lm)[5]
+```
+
+Looking at these numbers, we can predict that a given individual makes the income that's at the intercerpt, $`r round(race.intercept ,2)`, for our baseline, which is black females. We can use this test to predict income based on gender and race. Females of other races get the `intercept` plus the coefficent for their race, and males get the `intercept` plus the coefficent for their race and and coefficient for `gendermale`. For example, we predict that a black male makes the baseline, plus the `gendermale` coefficient, which is `r round(race.gendermale, 2)`, so we predict that a black male makes  $`r round((race.intercept + race.gendermale), 2)`. Our model predicts that a white female makes the `intercept` plus the coefficent for white, or $`r round((race.intercept + race.white), 2)`.
+
+```{r}
+black <- subset(survey, survey$race == 'black')
+white <- subset(survey, survey$race == 'white')
+hispanic <- subset(survey, survey$race == 'hispanic')
+mixed <- subset(survey, survey$race == 'mixed')
+black.ttest <- t.test(black$income.lastyr ~ black$gender)
+white.ttest <- t.test(white$income.lastyr ~ white$gender)
+hispanic.ttest <- t.test(hispanic$income.lastyr ~ hispanic$gender)
+mixed.ttest <- t.test(mixed$income.lastyr ~ mixed$gender)
+```
+
+We can look at **t-tests of the income differences subsetted by race** to explore this difference further. We find p-values of `r round(black.ttest$p.value, 5)` for black respondants, `r round(white.ttest$p.value, 5)` for white respondants, `r round(hispanic.ttest$p.value, 5)` for hispanic, and `r round(mixed.ttest$p.value, 5)` for mixed race. This higher p-value for the mixed race catergory reflects our initial assumption that while graphically there appears to be a very large difference in these means, the small sample size may be skewing that data. We also see a slightly higher p-value for the black pay gap than for white or hispanic, confirming our earlier inferences that the gap for blacks is not as significant. 
+
+[**NOTE What can we say given that white women make more than black men?**]
+**Run two sample t-test to compare**
+
+[**NOTE Why is our predicted value based on intercepts and coefficients not equal to the mean for black men?**]
+**Doing race * income will find how they interact together**
+
+
+
+#### Weight
+
+It appears that as men weight more, we can predict that they make slightly more money, while we predict that heavier women make less, as we can see in this linear regression.
+
+*The data here has been subsetted to eliminated some extremely low and extremely high values that I am assuing were entry errors.*
+
+```{r}
+weight.colors <- c("tomato2", "#999999")
+weight.plot <- ggplot(data=survey.weight.sub, aes(x=weight.2011, y=income.lastyr, color=gender))
+weight.plot + geom_point() + scale_colour_manual(values=weight.colors) +
+  geom_smooth(method="lm") +
+  ggtitle("Income by Weight") +
+  labs(x="Weight in 2011",y="Income Last Year") 
+```
+
+The findings appear to be similar to the weights that were reported in 2004, so it is not worth doing a separate anaysis of these values.
+
+```{r}
+weight.colors <- c("tomato2", "#999999")
+weight.2004.plot <- ggplot(data=survey.weight.sub, aes(x=weight.2004, y=income.lastyr, color=gender))
+weight.2004.plot + geom_point() + scale_fill_manual(values=weight.colors) +
+  geom_smooth(method="lm") +
+  ggtitle("Income by Weight") +
+  labs(x="Weight in 2004",y="Income Last Year") 
+```
+
+[**Possible additional research: Comparision of weight, per respondant, between 2004 and 2011**]
+**take out linear and it might find a curve or something instead, just stat_smooth(), not lm**
+**maybe fit polynomial**
+**use different model if better fit**
+**take out lower weights, up to maybe 75lb**
+
+Based on looking at the regression model, I hypothesized that weight is a factor that impacts the difference in income between men and women. I then used a linear model to find a more precise prediction.
+
+```{r}
+income.weight.lm <- lm(income.lastyr ~ gender * weight.2011, data = survey.weight.sub)
+#income.weight.lm$coef
+kable(round(summary(income.weight.lm)$coef, 3), format = 'markdown')
+
+## setting up variables for ANOVA
+gender.lm <- (lm(income.lastyr ~ gender, data=survey.weight.sub))
+weight.lm <- (lm(income.lastyr ~ gender * weight.2011, data=survey.weight.sub))
+```
+
+Unexpectedly, this model produces a negative coefficent for `gendermale`. But for every pound heavier that a man is, we can predict he will make $`r round((coef(income.weight.lm)["weight.2011"] + coef(income.weight.lm)[4]),2)` more (the `weight.2011` coefficient plus the `gendermale:weight.2011` coefficient), but for every pound heavier that a woman is, we predict she'll make $`r round(coef(income.weight.lm)["weight.2011"], 2)` (just the `weight.2011` coefficient).
+
+[**NOTE: Why Does it give a negative coefficent for gendermale and what does that mean?**]
+
+To give an example, if we look at a 180lb man and a 180lb woman and hold all other variables constant, we predict he'll make the `intercept` plus the coefficient for `gendermale` + (180lb) * (`weight.2011` + `gendermale:weight.2011`), or $`r round((coef(income.weight.lm)[1] + coef(income.weight.lm)[2] + 180 * (coef(income.weight.lm)[3] + coef(income.weight.lm)[4])), 2)`. We predict a woman of the same weight will make the `intercept` + her weight, 180lb * `weight.2011`, or $`r round((coef(income.weight.lm)[1] + 180 * (coef(income.weight.lm)[3])), 2)`.
+
+Lastly, we should test if our model using weight and gender is signifigantly more predictive than the model using gender alone. Running an ANOVA comparing the two models we find a p-value of `r round((anova(gender.lm, weight.lm)[2,6]), 2)`, we can say that yes, it is a signifigantly better model.
+
+#### Marital Status
+
+Next we'll look at the impact of marital status on income. First, though, we should check the size of the values before moving further in our analysis.
+
+```{r}
+r4 <- c("divorced", count(survey$marital.status=="divorced")[2,2], 
+        round(100 * (count(survey$marital.status=="divorced")[2,2])/(nrow(survey)), 2))
+r2 <- c("married", count(survey$marital.status=="married")[2,2], 
+        round(100 * (count(survey$marital.status=="married")[2,2])/(nrow(survey)), 2))
+r1 <- c("never married", count(survey$marital.status=="never married")[2,2], 
+        round(100 * (count(survey$marital.status=="never married")[2,2])/(nrow(survey)), 2))
+r5 <- c("separated", count(survey$marital.status=="separated")[2,2], 
+        round(100 * (count(survey$marital.status=="separated")[2,2])/(nrow(survey)), 2))
+r7 <- c("widowed", count(survey$marital.status=="widowed")[2,2], 
+        round(100 * (count(survey$marital.status=="widowed")[2,2])/(nrow(survey)), 2))
+r3 <- c("NA", count(survey$marital.status=="NA")[2,2], 
+        round(100 * (count(survey$marital.status=="NA")[2,2])/(nrow(survey)), 2))
+r6 <- c("invalid skip", count(survey$marital.status=="invalid skip")[2,2], 
+        round(100 * (count(survey$marital.status=="invalid skip")[2,2])/(nrow(survey)), 2))
+
+count.marital <- NULL
+count.marital <- rbind(count.marital, r1, r2, r3, r4, r5, r6, r7)
+colnames(count.marital) <- c("Industry", "Count", "% Respond")
+kable(count.marital)
+```
+
+[**NOTE: How could I have made this without using the r1, r2, etc displaying? I used rbind and created each row to make the table.**]
+**table of data and then another colum of table(my.data)/ nrows(my.data) and then append as another column to table, cbind**
+
+We can see that we have a very small sample size of `widowed` respondents, and upon looking at the data can see it is only `r count(survey.i$marital.status=="widowed")[2,2]`. Based on this sample size, we cannot make much inferences about widowed people from this data. There are also a small, but much larger number of `separated` individuals. We should keep this size in mind as we move through the analysis. We are missing values for `r as.numeric(count.marital[3,3]) - as.numeric(count.marital[6,3])`% of respondents (`NA` plus `invalid skip`), but that is not so low that we should not continue with the analysis.
+
+So now let's look at income by gender and marital status.
+
+```{r}
+marital.colors <- c("brown2", "cornsilk3")
+qplot(marital.status, income.lastyr, data=survey.i, geom="boxplot", fill=gender) +
+  scale_fill_manual(values=marital.colors) +
+  labs(x="Marital Status", y="Income Last Year", title="Mean Income by Marital Status & Gender") +
+  theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust = 1)) 
+```
+
+```{r}
+weight.colors <- c("pink", "#999999")
+weight.plot <- ggplot(data=survey.weight.sub, aes(x=weight.2011, y=income.lastyr, color=gender))
+weight.plot + geom_point() + scale_colour_manual(values=weight.colors) +
+  geom_smooth(method="lm") +
+  ggtitle("Income by Weight") +
+  labs(x="Weight in 2011",y="Income Last Year") 
+
+```
+
+From this plot we can see that there appears to be the smallest difference between men and women who have never been married and the greatest difference between those who are separated, and a somewhat similar gender wage gap between those who are married or divorced.
+
+```{r}
+income.marital.lm <- lm(income.lastyr ~ gender * marital.status, data = survey.i)
+#summary(income.marital.lm)
+#income.marital.lm$coef
+kable(round(summary(income.marital.lm)$coef, 3), format = 'markdown')
+
+## setting up variables for ANOVA
+gender.lm <- (lm(income.lastyr ~ gender, data=survey.i))
+marital.lm <- (lm(income.lastyr ~ gender * marital.status, data=survey.i))
+aov.out <- anova(gender.lm, marital.lm)
+pvals <- aov.out[["Pr(>F)"]]
+
+## setting up for comparison
+male.married <- (coef(income.marital.lm)[1] + coef(income.marital.lm)[2] + coef(income.marital.lm)[4] + coef(income.marital.lm)[9])
+female.married <- (coef(income.marital.lm)[1] + coef(income.marital.lm)[4])
+male.nevermarried <- (coef(income.marital.lm)[1] + coef(income.marital.lm)[2] + coef(income.marital.lm)[5] + coef(income.marital.lm)[10])
+female.nevermarried <- (coef(income.marital.lm)[1] + coef(income.marital.lm)[5])
+stat.married <- coef(income.marital.lm)[4]
+
+stat.nevermarried <- coef(income.marital.lm)[5]
+stat.sep <- coef(income.marital.lm)[6]
+men.married <- coef(income.marital.lm)[9]
+men.nevermarried <- coef(income.marital.lm)[10]
+men.sep <- coef(income.marital.lm)[11]
+men <- coef(income.marital.lm)[2]
+mar.intercept <- coef(income.marital.lm)[1]
+
+men1 <- (men) + (men.married)
+men2 <- (men) + (men.nevermarried)
+men3 <- (men) + (men.sep)
+
+married.diff.p <- round((100 * (female.married)/(male.married)), 2)
+nevermarried.diff.p <- round((100 * (female.nevermarried)/(male.nevermarried)), 2)
+gender.diff.p <- round((100 * (gender.income[1,2])/(gender.income[2,2])), 2)
+
+```
+
+The baseline for this model is `divorced` and `female`. We can see from these coefficients that we predict that compared to a divorced woman, women who are married make $`r round(stat.married, 2)` more, never married women make $`r round(stat.nevermarried, 2)` more,  while separated women make $`r round(stat.sep, 2)`. 
+
+On the other hand, for men we predict that compared to a divorced man, married men make $`r round(men1, 2)` more, never married men make $`r round(men2, 2)` and separated men make $`r round(men3, 2)`.
+
+Holding all other variables constant, if we compared a married man and a married woman, we'd predict that he'd make :
+`intercept` + `gendermale` + `marital.statusmarried` + `gendermale:marital.statusmarried` = $`r round(male.married, 2)`
+and predict that she'd make:
+`intercept` + `marital.statusmarried` = $`r round(female.married, 2)`
+
+This difference -- $`r round((male.married - female.married), 2)`, with women making `r round(married.diff.p, 2) ` % of men's mean income, is lower than what we found the overall mean difference (`r gender.diff.p`%).
+
+
+Holding all other variables constant, if we compared a never married man and a never married woman, we'd predict that he'd make :
+`intercept` + `gendermale` + `marital.statusnever married` + `gendermale:marital.statusnever married` = $`r round(male.nevermarried, 2)`
+and predict that she'd make:
+`intercept` + `marital.statusnever married` = $`r round(female.nevermarried, 2)`
+
+This difference here, $`r round((male.nevermarried - female.nevermarried), 2)`, with women making `r nevermarried.diff.p` % of men's mean income, is a much closer percentage than what we found the overall mean difference (`r gender.diff.p`%).
+
+Since we found two different amounts in comparison to our intial findings on the wage gap, it seems reasonable that marital status has a further impact on that gap -- that depending on a woman's marital status she may make even less than similar man or may make closer -- so this variable is an important predictor.
+
+As we did with the `weight` variable, let's check that our `marital status` analysis gives a closer prediction than the general model. Running an ANOVA comparing the two models we find a p-value of `r round(pvals[2], 8)`, we can say that yes, it is a signifigantly better model.
+
+```{r}
+anova(gender.lm, marital.lm)
+```
+
+This analysis was done when excluding topcoded variables, so let's see if it's different with the topcoded valudes in.
+
+```{r}
+marital.colors <- c("gold1", "cornsilk3")
+qplot(marital.status, income.lastyr, data=survey.i, geom="boxplot", fill=gender) +
+  scale_fill_manual(values=marital.colors) +
+  labs(x="Marital Status", y="Income Last Year", title="Mean Income by Marital Status with Topcoded") +
+  theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust = 1)) 
+```
+
+```{r}
+income.marital.top.lm <- lm(income.lastyr ~ gender * marital.status, data = survey)
+#summary(income.marital.top.lm)
+kable(round(summary(income.marital.top.lm)$coef, 3), format = 'markdown')
+```
+
+These values look about the same as what we saw in our original analysis, so we can continue to exclude them.
+
+## Discussion
+
+It appears that both `weight` and `marital status` are statistically signifigant in contributing to the wage gap between men and women.
+
+The weight variable is interesting. It confirms what I and others suspect and has been proven in some studies -- women are peanlized for their appearance to a greater extent than men are, and in particular for gaining weight. I was surprised, though, that a person's self-assesment of being overweight, underweight, or average did not seem ot have a reltaionship to income.
+
+It's also interesting that when comparing men and women who had never been married the wage gap closed much tighter. While this data only looked at a small range of birth years, and therefore a small range of ages, it might be worth further investigating if other factors, such as age, contribute to this difference.
+
+While this analysis is fairly accurate based on the data presented, and it was on a fairly large dataset, this is still only one dataset. In order to feel more confident in the findings I would want to run similar tests using other large, longitudinal datsets to see if the same findings stand.
+
