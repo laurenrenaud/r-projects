@@ -222,7 +222,9 @@ survey <- transform(survey,
 # subset leaving out topcoded incomes
 survey.i <- subset(survey, subset = income.lastyr < 120000)
 survey.house.sub <- subset(survey.i, subset = household.networth.parent > 0 & household.networth.parent < 599002)
-survey.weight.sub <- subset(survey.i, subset = weight.2011 > 70)
+survey.weight.sub <- subset(survey.i, subset = weight.2011 > 90)
+survey.weight.sub2004 <- subset(survey.i, subset = weight.2004 > 90)
+
 survey.female <- subset(survey.i, subset = gender=="female")
 survey.male <- subset(survey.i, subset = gender=="male")
 ```
@@ -308,10 +310,11 @@ qplot(industry, income.lastyr, data=survey.i, geom="boxplot", fill=gender) +
   scale_fill_manual(values=industry.colors) +
   labs(x="Industry", y="Income Last Year", title="Mean Income by Industry & Gender") +
   theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust = 1))
+
+## NOTE CHANGE: Need to resort by absolute or percent difference
 ```
 
 
-[**NOTE How do I make this graphic sort by percentage difference or absolute difference, instead of alphabetical?**]
 
 ## Methodology
 
@@ -395,9 +398,11 @@ qplot(weight.2011.feel, income.lastyr, data=survey.weight.sub, geom="boxplot", f
   scale_fill_manual(values=weight.feel.colors) +
   labs(x="Feelings About Own Weight", y="Income Last Year", title="Mean Income by Feelings About Weight") +
   theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust = 1))
+
+## NOTE CHANGE: resort by different order
 ```
 
-[**NOTE How do I make this graphic sort by percentage difference or absolute difference, instead of alphabetical? I sort of hacked it by adding letters a-g at the beginning, but how do it cleanly?**]
+
 
 #### *Chosen Analysis*
 
@@ -448,15 +453,14 @@ black.ttest <- t.test(black$income.lastyr ~ black$gender)
 white.ttest <- t.test(white$income.lastyr ~ white$gender)
 hispanic.ttest <- t.test(hispanic$income.lastyr ~ hispanic$gender)
 mixed.ttest <- t.test(mixed$income.lastyr ~ mixed$gender)
+
+
+## NOTE: Run two sample t-test to compare white women and black men
+
+## NOTE: Use race * income as well to find interaction term and then will get black men predicted valued = to black men sample mean.
 ```
 
 We can look at **t-tests of the income differences subsetted by race** to explore this difference further. We find p-values of `r round(black.ttest$p.value, 5)` for black respondants, `r round(white.ttest$p.value, 5)` for white respondants, `r round(hispanic.ttest$p.value, 5)` for hispanic, and `r round(mixed.ttest$p.value, 5)` for mixed race. This higher p-value for the mixed race catergory reflects our initial assumption that while graphically there appears to be a very large difference in these means, the small sample size may be skewing that data. We also see a slightly higher p-value for the black pay gap than for white or hispanic, confirming our earlier inferences that the gap for blacks is not as significant. 
-
-[**NOTE What can we say given that white women make more than black men?**]
-**Run two sample t-test to compare**
-
-[**NOTE Why is our predicted value based on intercepts and coefficients not equal to the mean for black men?**]
-**Doing race * income will find how they interact together**
 
 
 
@@ -471,6 +475,7 @@ weight.colors <- c("tomato2", "#999999")
 weight.plot <- ggplot(data=survey.weight.sub, aes(x=weight.2011, y=income.lastyr, color=gender))
 weight.plot + geom_point() + scale_colour_manual(values=weight.colors) +
   geom_smooth(method="lm") +
+  #stat_smooth() +
   ggtitle("Income by Weight") +
   labs(x="Weight in 2011",y="Income Last Year") 
 ```
@@ -479,18 +484,20 @@ The findings appear to be similar to the weights that were reported in 2004, so 
 
 ```{r}
 weight.colors <- c("tomato2", "#999999")
-weight.2004.plot <- ggplot(data=survey.weight.sub, aes(x=weight.2004, y=income.lastyr, color=gender))
+weight.2004.plot <- ggplot(data=survey.weight.sub2004, aes(x=weight.2004, y=income.lastyr, color=gender))
 weight.2004.plot + geom_point() + scale_fill_manual(values=weight.colors) +
   geom_smooth(method="lm") +
   ggtitle("Income by Weight") +
   labs(x="Weight in 2004",y="Income Last Year") 
+
+# NOTE:
+# [**Possible additional research: Comparision of weight, per respondant, between 2004 and 2011**]
+# **take out linear and it might find a curve or something instead, just stat_smooth(), not lm**
+# **maybe fit polynomial**
+# **use different model if better fit**
+# **take out lower weights, up to maybe 95lb**]
 ```
 
-[**Possible additional research: Comparision of weight, per respondant, between 2004 and 2011**]
-**take out linear and it might find a curve or something instead, just stat_smooth(), not lm**
-**maybe fit polynomial**
-**use different model if better fit**
-**take out lower weights, up to maybe 75lb**
 
 Based on looking at the regression model, I hypothesized that weight is a factor that impacts the difference in income between men and women. I then used a linear model to find a more precise prediction.
 
@@ -504,13 +511,27 @@ gender.lm <- (lm(income.lastyr ~ gender, data=survey.weight.sub))
 weight.lm <- (lm(income.lastyr ~ gender * weight.2011, data=survey.weight.sub))
 ```
 
-Unexpectedly, this model produces a negative coefficent for `gendermale`. But for every pound heavier that a man is, we can predict he will make $`r round((coef(income.weight.lm)["weight.2011"] + coef(income.weight.lm)[4]),2)` more (the `weight.2011` coefficient plus the `gendermale:weight.2011` coefficient), but for every pound heavier that a woman is, we predict she'll make $`r round(coef(income.weight.lm)["weight.2011"], 2)` (just the `weight.2011` coefficient).
-
-[**NOTE: Why Does it give a negative coefficent for gendermale and what does that mean?**]
+Unexpectedly, this model produces a negative coefficent for `gendermale`. There were a small number of very small values that skewed the data, including some negative values, and we will ignore these outliers. Either way, for every pound heavier that a man is, we can predict he will make $`r round((coef(income.weight.lm)["weight.2011"] + coef(income.weight.lm)[4]),2)` more (the `weight.2011` coefficient plus the `gendermale:weight.2011` coefficient), but for every pound heavier that a woman is, we predict she'll make $`r round(coef(income.weight.lm)["weight.2011"], 2)` (just the `weight.2011` coefficient).
 
 To give an example, if we look at a 180lb man and a 180lb woman and hold all other variables constant, we predict he'll make the `intercept` plus the coefficient for `gendermale` + (180lb) * (`weight.2011` + `gendermale:weight.2011`), or $`r round((coef(income.weight.lm)[1] + coef(income.weight.lm)[2] + 180 * (coef(income.weight.lm)[3] + coef(income.weight.lm)[4])), 2)`. We predict a woman of the same weight will make the `intercept` + her weight, 180lb * `weight.2011`, or $`r round((coef(income.weight.lm)[1] + 180 * (coef(income.weight.lm)[3])), 2)`.
 
 Lastly, we should test if our model using weight and gender is signifigantly more predictive than the model using gender alone. Running an ANOVA comparing the two models we find a p-value of `r round((anova(gender.lm, weight.lm)[2,6]), 2)`, we can say that yes, it is a signifigantly better model.
+
+To look at the data even more precisely, let's explore non-linear options for models
+.
+
+```{r}
+weight.colors <- c("tomato2", "#999999")
+weight.plot <- ggplot(data=survey.weight.sub, aes(x=weight.2011, y=income.lastyr, color=gender))
+weight.plot + geom_point(size = 1.5, alpha = 0.75) +
+  scale_colour_manual(values=weight.colors) +
+  #geom_smooth(method="lm") +
+  stat_smooth() +
+  ggtitle("Income by Weight") +
+  labs(x="Weight in 2011",y="Income Last Year") 
+```
+
+We can see that while female respondants relationship between weight and income last year maintains a fairly linear relationship, there is more variablity in the curve of the relationship for men. An area for further research may be to try to normalize this data against average weights for men and women and then look at the relationship between income last year and weight relative to average rate for the gender.
 
 #### Marital Status
 
