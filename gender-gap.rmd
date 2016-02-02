@@ -523,7 +523,7 @@ To look at the data even more precisely, let's explore non-linear options for mo
 ```{r}
 weight.colors <- c("tomato2", "#999999")
 weight.plot <- ggplot(data=survey.weight.sub, aes(x=weight.2011, y=income.lastyr, color=gender))
-weight.plot + geom_point(size = 1.5, alpha = 0.75) +
+weight.plot + geom_point(size = 1.5, alpha = 0.6) +
   scale_colour_manual(values=weight.colors) +
   #geom_smooth(method="lm") +
   stat_smooth() +
@@ -557,10 +557,10 @@ count.marital <- NULL
 count.marital <- rbind(count.marital, r1, r2, r3, r4, r5, r6, r7)
 colnames(count.marital) <- c("Industry", "Count", "% Respond")
 kable(count.marital)
+
+## NOTE CHANGE: **table of data and then another colum of table(my.data)/ nrows(my.data) and then append as another column to table, cbind**
 ```
 
-[**NOTE: How could I have made this without using the r1, r2, etc displaying? I used rbind and created each row to make the table.**]
-**table of data and then another colum of table(my.data)/ nrows(my.data) and then append as another column to table, cbind**
 
 We can see that we have a very small sample size of `widowed` respondents, and upon looking at the data can see it is only `r count(survey.i$marital.status=="widowed")[2,2]`. Based on this sample size, we cannot make much inferences about widowed people from this data. There are also a small, but much larger number of `separated` individuals. We should keep this size in mind as we move through the analysis. We are missing values for `r as.numeric(count.marital[3,3]) - as.numeric(count.marital[6,3])`% of respondents (`NA` plus `invalid skip`), but that is not so low that we should not continue with the analysis.
 
