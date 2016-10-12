@@ -1,0 +1,222 @@
+---
+title: "Violation Report"
+author: "CMU Systems Group"
+date: "September 30, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(lubridate)
+
+### Exception / error handling:
+### think about what has to be true before you start using the data
+### and what has to be true when you finish with the data
+
+cbPalette <- c("#000000", "#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+# read in report file
+report <- read.csv("0_qry_GISExport-ViolationWilkins.csv", header = TRUE, as.is=TRUE)
+
+# read dates in as dates
+report$EventDate <- as.Date(report$EventDate, "%Y/%m/%d")
+
+# read true false inputs as text not boolean
+## THIS MIGHT BE WHERE TO CHANGE TO OPEN / CLOSED / MISSING
+report$Resolved <- ifelse(report$Resolved=="TRUE", "Closed",
+                                        ifelse(report$Resolved=="FALSE", "Open", "Missing"))
+# import parID to xy file
+convert <- read.csv("parcels_xy_only.csv", header=TRUE)
+
+# join xy coords to violations report
+report <- merge(report, convert, by.x="ParID", by.y="parid", all.x = TRUE)
+
+# drop Chapter 144 Article IV Maintenance of Municipal Rights-of-Way
+report <- slice(report, Violation!="Chapter 144 Article IV Maintenance of Municipal Rights-of-Way")
+
+# pull out most recent month's violations
+report.month <- report %>%
+  filter(
+    month(EventDate) == (month(Sys.Date()) - 1) & year(EventDate) == year(Sys.Date())
+  )
+
+# filter this year's violations
+report.year <- report %>%
+  filter(
+    year(EventDate) == year(Sys.Date())
+  )
+
+# Report of all violations over time
+all.byaddress <- report %>%
+  # group by address, so we get # of violations per property
+  # parcel ID probably would have been better but I figured
+  # address is more generally understandable
+  group_by(Address) %>%
+  summarize(
+    Violations = n(),
+    # create variables in this table for most recent date and first date
+    # so we can see how long they've been interacting with CE Officers
+    Recent = max(EventDate),
+    First = min(EventDate),
+    # Trying to create a column that will tell if ALL violations are closed 
+    # else say (at least something) is open
+    # but stuck on getting this to work
+    resolved = any(Resolved[Recent]=="Open"),
+    #resolved = isTRUE(Resolved[Recent]),
+    #resolved = all(Resolved[Recent], na.rm=TRUE),
+    # sum booleans and then compare to teh number of violations
+    # if some of resolved is number of violations then they're all resolved
+    # do in this summary chunk
+    #resolved = ifelse(sum(Resolved[Recent]=="TRUE") == sum(Resolved[Recent]), "TRUE", "FALSE"),
+    #resovled = any(Resolved[Recent]==FALSE, na.rm=TRUE),
+    #Resolved = all(Resolved[max(EventDate)]==TRUE),
+    #Resolved = sum(Resolved[max(EventDate)]==TRUE, na.rm=T) == length(Resolved[max(EventDate)]),
+    #Resolved = Resolved[Recent],
+    Months = round((Recent - First)/30, 1)
+    #Months = round((max(EventDate) - min(EventDate))/30, 1)
+    # trying to count just months, not days:::
+    #duration.months = months(Recent - First),
+    # Month = month(Recent) - month(First)
+  ) %>%
+  # Sort by number of violations, descending
+  arrange(desc(Violations))
+
+
+# sort violation types by order and then excerpt top violations
+violation.names <- sort(table(report.year$Violation), decreasing = TRUE)
+top.violations <- violation.names[violation.names > 10] # could also switch this to be top x number
+
+# 
+# ifelse((report$Resolved[EventDate=="2015-03-30"]=="TRUE" = sum(report$Resolved[EventDate=="2015-03-30"])),
+#        "TRUE", "FALSE")
+# 
+# report %>%
+#   ifelse(
+#     (sum(Resolved[EventDate="2015-03-30"]=="TRUE"))==(sum(Resolved(EventDate=="2015-03-30"),
+#                                                    "TRUE", "FALSE")))
+# 
+# sum(report$Resolved[report$EventDate=="2015-03-30"]==TRUE, na.rm=T) ==
+#   length(report$Resolved[report$EventDate=="2015-03-30"])
+# 
+# 
+# sum(report$Resolved[report$EventDate=="2015-03-30"]==TRUE, na.rm=T) ==
+#   sum(report$Resolved[report$EventDate=="2015-03-30"]==TRUE | 
+#         report$Resolved[report$EventDate=="2015-03-30"]==FALSE)
+# 
+# 
+# sum(Resolved[Recent]==TRUE, na.rm=T) == length(Resolved[Recent])
+
+
+# export to external .csv
+# write.csv(report.month, "monthreport.csv", row.names = FALSE)
+```
+
+### This Month's Violation Types
+```{r month_vio_types}
+month.types <- report.month %>%
+  group_by(Violation) %>%
+  summarise(
+    Total = n()
+  ) %>%
+  arrange(desc(Total))
+
+kable(month.types)
+
+ggplot(month.types, aes(Violation, Total)
+       ) +
+  geom_bar(stat = "identity")
+  
+  
+  geom_line(group="Months", colour = "forestgreen", size = 1) +
+  expand_limits(x = 0, y = 0) +
+  labs(y = "Violations Count", title="Violations by Month")
+
+```
+
+### This Month's Violations by Address
+```{r month_address, echo=FALSE}
+# only last month's violations in same by address format
+recent.byaddress <- all.byaddress %>%
+  filter(
+    # filter by being in the previous month
+    month(Recent) == (month(Sys.Date()) - 1) & year(Recent) == year(Sys.Date())
+  )
+
+kable(recent.byaddress)
+
+# code below inserts map image
+```
+
+![Violations Map](Month_Violations.jpg)
+
+### This Year's Violation Types
+```{r year_vio_types}
+year.types <- report.year %>%
+  group_by(Violation) %>%
+  summarise(
+    Total = n()
+  ) %>%
+  arrange(desc(Total))
+
+kable(year.types)
+```
+
+### Violations This Year by Month
+```{r year_month_count}
+year.month <- report.year %>%
+  group_by(Months = month(EventDate, label = TRUE)) %>%
+  summarise(
+    Total = n()
+  )
+
+year.month.type <- report.year %>%
+  group_by(Months = month(EventDate, label = TRUE), Violation) %>%
+  summarise(
+    Total = n()
+  )
+
+# report %>%
+#   group_by(Violation) %>%
+#   summarise(
+#     Total = n()
+#   ) %>%
+#   arrange(desc(Total))
+
+# plot violations by month
+ggplot(year.month, aes(Months, Total)
+       ) +
+  geom_line(group="Months", colour = "forestgreen", size = 1) +
+  expand_limits(x = 0, y = 0) +
+  labs(y = "Violations Count", title="Violations by Month")
+
+# plot types of violations by month
+year.month.type %>%
+  filter(Violation %in% names(top.violations)) %>%
+  ggplot(aes(x=Months, y=Total, group=Violation, colour=Violation)
+       ) +
+  geom_line(size = 1, alpha=0.8) +
+  expand_limits(x = 0, y = 0) +
+  labs(y = "Violations Count",
+       title="Overall Top Violations Types by Month") +
+  scale_colour_manual(values=cbPalette)
+
+```
+
+### This Year's Address With 10+ Violations
+```{r year_address}
+# only last month's violations in same by address format
+# want to filter to only those that are still open but can't get
+# that filter to work above
+# so instead trying filtering by just 10+ violations
+# also could filter by (Violation %in% names(top.violations)) but
+# that appears to be getting the same list
+year.byaddress <- all.byaddress %>%
+  filter(
+    year(Recent) == year(Sys.Date()) &
+      Violations >= 10
+  )
+kable(year.byaddress)
+```
