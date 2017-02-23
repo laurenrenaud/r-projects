@@ -1,0 +1,10 @@
+name: AlleghenyCrashes
+account: laurenrenaud
+server: shinyapps.io
+appId: 140670
+bundleId: 629334
+url: https://laurenrenaud.shinyapps.io/AlleghenyCrashes/
+when: 1480450089.91503
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: explore.R

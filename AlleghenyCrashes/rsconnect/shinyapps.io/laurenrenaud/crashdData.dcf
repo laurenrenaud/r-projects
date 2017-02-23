@@ -1,0 +1,10 @@
+name: crashdData
+account: laurenrenaud
+server: shinyapps.io
+appId: 136934
+bundleId: 611365
+url: https://laurenrenaud.shinyapps.io/crashdData/
+when: 1478803665.91232
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: data/crashes_2015_clean.csv|data/crashes_2015.csv
