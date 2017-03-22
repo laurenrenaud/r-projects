@@ -1,0 +1,235 @@
+---
+title: "Code Enforcement"
+output:
+  pdf_document:
+    pandoc_args: [
+      "--latex-engine=xelatex"
+    ]
+---
+
+```{r setup, echo=FALSE, warning=FALSE, message=FALSE}
+library(dplyr)
+library(lubridate)
+library(jsonlite)
+library(knitr)
+library(ggplot2)
+library(leaflet)
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
+options (scipen=4)
+cbPalette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999", "#000000", "#8856a7")
+
+# QUESTION
+# appears that many addresses don't have eventIDs
+# does the property database contain all properties
+# regardless of if they have violations?
+# QUESTION
+# PropertyID vs ParID
+# Are they consistently coded between both
+# Do some tables only use PropertyID
+# which should we use for joins?
+
+#### Things we want to analyze
+#
+# number of inspections per month
+# number of resolved and unresolved per month
+#   # new ones plus outstanding
+# days of compliance
+#   # this month
+#   # this year
+#   # how long particular violation at partiulcar address
+# muliple violations by address
+# maybe multiple violations by owner
+#   # possibly look into linking this across municipalites
+# open violations
+#   # date resolved
+#   # violation type
+#   # address
+# maybe map (might put on website instead)
+
+## Filter dataframes for municipality
+## Could probably figure out how to do this
+## by creating a function and then using `apply` later
+muni.data <- filter(muni.data, muniname == municipality)
+closed <- filter(closed, muniname == municipality)
+monthCases <- filter(monthCases, muniname == municipality)
+monthClosed <- filter(monthClosed, muniname == municipality)
+monthOpen <- filter(monthOpen, muniname == municipality)
+muni.year <- filter(muni.year, muniname == municipality)
+open <- filter(open, muniname == municipality)
+```
+
+# *`r municipality` `r monthName` `r yearChar` Report*
+
+### This Month's Activity
+
+This month, Enforcement Officers
+
+ - Opened `r length(unique(monthCases$EventID))` new cases
+ - `r length(unique(monthOpen$EventID))` of which are still open and
+ - `r length(unique(monthClosed$EventID))` are closed, with the remaining cases handled informally.
+ - `r sum(muni.data$ComplianceDate > reportMonthDate & muni.data$ComplianceDate < nextMonth, na.rm=T)` cases were marked as resolved in the past month.
+
+```{r month, echo=FALSE, warning=FALSE, message=FALSE}
+month.count <- monthCases %>%
+  group_by(Violation) %>%
+  summarise(
+    Count = n()
+  )%>%
+  filter(!is.na(Violation), Violation!="") %>%
+  arrange(desc(Count))
+```
+
+```{r monthBar, message=FALSE, warning=FALSE, fig.height=5.5}
+# reorder factor levels correctly
+month.count$Violation <- factor(month.count$Violation, 
+                                levels = month.count$Violation[order(month.count$Count)])
+
+head(month.count, 8) %>%
+  ggplot(aes(Violation, Count)) + 
+  geom_bar(aes(fill = Violation), stat = "identity") + 
+  scale_fill_manual(values=cbPalette) + 
+  ggtitle("Top Violations This Month") + 
+  xlab("") +
+  theme(legend.justification=c(1,1), legend.position=c(0.65,1), axis.text.x=element_blank())
+```
+
+### Past Twelve Months
+
+```{r yearSetup, echo=FALSE, warning=FALSE, message=FALSE}
+year.count <- muni.year %>%
+  filter(min(EventDate) > (reportMonthDate - months(12))) %>%
+  # group by Violation to get the violation counts
+  group_by(Violation) %>%
+  summarise(
+    Count = n(),
+    Open = sum(OverallStatus=="Open"),
+    Closed = sum(OverallStatus=="Closed")
+  )%>%
+  filter(!is.na(Violation), Violation!="") %>%
+  arrange(desc(Count))
+```
+
+This year, Enforcement Officers handled
+
+ - `r length(unique(muni.year$EventID))` unique cases
+ - `r table(muni.year$OverallStatus)[2]` of which are still open,
+ - `r table(muni.year$OverallStatus)[1]` are closed, with the remaining cases handled informally.
+
+```{r year, warning=FALSE, message=FALSE}
+# plot count of violations by month
+muni.year %>%
+  mutate(Month = month(EventDate)) %>%
+  group_by(Month) %>%
+  summarise(
+    Count = n(),
+    Open = sum(OverallStatus=="Open"),
+    Closed = sum(OverallStatus=="Closed")
+  ) %>%
+  ggplot(aes(Month, Count)) +
+  geom_bar(stat = "identity", fill="#a63603") +
+  labs(y = "Violations Count", title="Count by Month") + 
+  # label months with names instead of numbers
+  scale_x_continuous(breaks = c(1:12), labels = c("Jan", "Feb", "Mar", "Apr",
+                                                  "May","Jun", "Jul", "Aug", 
+                                                  "Sep", "Oct","Nov", "Dec"))
+```
+
+## Top Violations This Year
+```{r yearBar, message=FALSE, warning=FALSE, fig.height=6}
+# reorder factor levels correctly
+year.count$Violation <- factor(year.count$Violation, 
+                                levels = year.count$Violation[order(year.count$Count)])
+
+head(year.count, 8) %>%
+  ggplot(aes(Violation, Count)) + 
+  geom_bar(aes(fill = Violation), stat = "identity") + 
+  scale_fill_manual(values=cbPalette) + 
+  ggtitle("Top Violations Twelve Months") + 
+  xlab("") +
+  theme(legend.position="bottom", legend.direction="vertical", axis.text.x=element_blank())
+```
+
+## All Violations This Year
+```{r yearTable, warning=FALSE, message=FALSE}
+kable(year.count)
+```
+
+This graphic shows the top violations, and how they fluctuate over the course of the year.
+
+
+```{r yearByType, message=FALSE, warning=FALSE}
+# sort violation types by order and then excerpt top violations
+violation.names <- sort(table(muni.year$Violation), decreasing = TRUE)
+top.violations <- head(violation.names, 6)
+
+muni.year %>%
+  filter(Violation %in% names(top.violations)) %>%
+  mutate(Month = month(EventDate)) %>%
+  group_by(Month, Violation) %>%
+  summarise(
+    Count = n()
+  ) %>%
+  ggplot(aes(x=Month, y=Count, group=Violation, colour=Violation)) +
+  geom_line(size = 1, alpha=0.8) +
+  expand_limits(x = 0, y = 0) +
+  labs(y = "Violations Count",
+       title="Overall Top Violations Types by Month") +
+  scale_colour_manual(values=cbPalette) +
+  #theme(legend.justification=c(1,1), legend.position=c(1,1)) +
+  theme(legend.position="bottom", legend.direction="vertical") +
+  # label months with names instead of numbers
+  scale_x_continuous(breaks = c(1:12), labels = c("Jan", "Feb", "Mar", "Apr",
+                                                  "May","Jun", "Jul", "Aug", 
+                                                  "Sep", "Oct","Nov", "Dec"))
+```
+
+### This Year's Properties With 10+ Violations
+
+This table lists the PropertyIDs for those with more than 10 violations, and date the violation was resolved, where available.
+
+```{r year_address, message=FALSE, warning=FALSE}
+# only last month's violations in same by address format
+# want to filter to only those that are still open but can't get
+# that filter to work above
+# so instead trying filtering by just 10+ violations
+# also could filter by (Violation %in% names(top.violations)) but
+# that appears to be getting the same list
+year.byParcelID <- muni.year %>%
+  group_by(PropertyID) %>%
+  summarise(
+    Count = n(),
+    FirstDate = min(EventDate),
+    DateResolved = max(DateResolved)
+    #Status = OverallStatus[max(EventDate)]
+    #TimeOpen = ComplianceDate - FirstDate
+  ) %>%
+  arrange(desc(Count)) %>%
+  filter(Count > 10)
+
+kable(year.byParcelID)
+```
+
+
+```{r map}
+# map.data <- filter(muni.data, !is.na(Violation), !is.na(lat))
+# leaflet() %>%
+#       # use the CartoDB map for more subdued map tile colors
+#       addProviderTiles("CartoDB.Positron") %>%
+#       setView(lng = -79.8, lat = 40.4212, zoom = 12) %>%
+#       addCircleMarkers(data = map.data,
+#                        lng = ~long, lat = ~lat, 
+#                        popup = paste("Violation:", map.data$Violation,
+#                                      "<br> Initial Date:", map.data$EventDate),
+#                  # the marker clusters gives us a nice visual 
+#                  # effect where when we zoom out points cluster
+#                  # together, and as we zoom in they are pulled apart
+#                  # showing the individual markers.
+#                  #clusterOptions = markerClusterOptions()
+#                  radius = 5,
+#                  stroke = TRUE,
+#                  color = "#323232",
+#                  weight = 3,
+#                  fillColor = "#7fcdbb",
+#                  fillOpacity = 0.7
+#                  ) 
+```
